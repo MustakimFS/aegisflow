@@ -1,0 +1,17 @@
+# Prometheus Operator integration. Skip if your cluster runs the bare prom server.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aegisflow
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames: [aegisflow]
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: aegisflow
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

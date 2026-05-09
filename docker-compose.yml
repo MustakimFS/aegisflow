@@ -1,0 +1,145 @@
+name: aegisflow
+
+x-defaults: &svc-defaults
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    POSTGRES_DSN: postgresql://aegis:devonly_change_me@postgres:5432/aegisflow
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: aegisflow
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: devonly_change_me
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegisflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+    volumes:
+      - redis-data:/data
+    ports: ["6379:6379"]
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data"]
+    volumes:
+      - nats-data:/data
+    ports: ["4222:4222", "8222:8222"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports: ["4317:4317", "4318:4318", "8889:8889"]
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./infra/observability/tempo.yaml:/etc/tempo.yaml:ro
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on: [prometheus, tempo]
+
+  gateway:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    ports: ["8080:8080"]
+    depends_on:
+      redis: { condition: service_healthy }
+      orchestrator: { condition: service_started }
+
+  orchestrator:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/orchestrator/Dockerfile
+    ports: ["8081:8081"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      reliability: { condition: service_started }
+      guardrails: { condition: service_started }
+      memory: { condition: service_started }
+      replay: { condition: service_started }
+
+  reliability:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/reliability/Dockerfile
+    ports: ["8082:8082"]
+
+  guardrails:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/guardrails/Dockerfile
+    ports: ["8083:8083"]
+
+  memory:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/memory/Dockerfile
+    ports: ["8084:8084"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  replay:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/replay/Dockerfile
+    ports: ["8085:8085"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  chaos:
+    <<: *svc-defaults
+    build:
+      context: .
+      dockerfile: services/chaos/Dockerfile
+    ports: ["8086:8086"]
+
+volumes:
+  postgres-data:
+  redis-data:
+  nats-data:
+  prometheus-data:
+  grafana-data:

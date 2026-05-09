@@ -1,0 +1,129 @@
+{
+  "title": "AegisFlow - Reliability Overview",
+  "uid": "aegisflow-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Workflow throughput (RPS)",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(aegisflow_workflow_duration_seconds_count[1m]))",
+          "legendFormat": "rps"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "p95 workflow latency (s)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aegisflow_workflow_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Reliability rejection rate",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(aegisflow_workflow_duration_seconds_count{status=\"rejected\"}[5m])) / sum(rate(aegisflow_workflow_duration_seconds_count[5m]))",
+          "legendFormat": "reject_rate"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Avg confidence",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum(rate(aegisflow_reliability_confidence_sum[5m])) / sum(rate(aegisflow_reliability_confidence_count[5m]))",
+          "legendFormat": "avg"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Confidence distribution",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(aegisflow_reliability_confidence_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aegisflow_reliability_confidence_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Retries / fallbacks per second",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(aegisflow_retries_total[1m]))",
+          "legendFormat": "retry/{{provider}}"
+        },
+        {
+          "expr": "sum by (from_provider) (rate(aegisflow_fallback_total[1m]))",
+          "legendFormat": "fallback/{{from_provider}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Circuit breaker state (0/1/2)",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "aegisflow_circuit_state",
+          "legendFormat": "{{provider}}/{{model}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Hallucination flags / sec",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (heuristic) (rate(aegisflow_hallucination_flags_total[1m]))",
+          "legendFormat": "{{heuristic}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Token throughput",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (provider, direction) (rate(aegisflow_tokens_total[1m]))",
+          "legendFormat": "{{provider}}/{{direction}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Chaos injections",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (scenario) (rate(aegisflow_chaos_injections_total[1m]))",
+          "legendFormat": "{{scenario}}"
+        }
+      ]
+    }
+  ]
+}

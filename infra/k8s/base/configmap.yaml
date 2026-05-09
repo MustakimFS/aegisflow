@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aegisflow-config
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  RATE_LIMIT_RPS: "200"
+  RATE_LIMIT_BURST: "400"
+  RELIABILITY_MIN_CONFIDENCE: "0.75"
+  CIRCUIT_BREAKER_THRESHOLD: "0.5"
+  CIRCUIT_BREAKER_WINDOW_SEC: "30"
+  CIRCUIT_BREAKER_COOLDOWN_SEC: "15"
+  CHAOS_ENABLED: "false"

@@ -1,0 +1,87 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-packages
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Unit tests
+        run: uv run pytest tests/ -m "not integration" --cov=libs --cov=services --cov-report=xml --tb=short -v
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env for CI
+        run: cp .env.example .env
+
+      - name: Compose up
+        run: docker compose up -d --build --wait
+
+      - name: Wait for services
+        run: |
+          for svc in gateway orchestrator reliability guardrails memory replay chaos; do
+            port=$(case $svc in
+              gateway) echo 8080;;
+              orchestrator) echo 8081;;
+              reliability) echo 8082;;
+              guardrails) echo 8083;;
+              memory) echo 8084;;
+              replay) echo 8085;;
+              chaos) echo 8086;;
+            esac)
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:${port}/healthz; then break; fi
+              sleep 2
+            done
+          done
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Sync workspace
+        run: uv sync --all-packages
+
+      - name: Integration tests
+        run: uv run pytest tests/integration/ -v
+
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Compose down
+        if: always()
+        run: docker compose down -v
